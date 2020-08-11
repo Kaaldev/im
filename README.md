@@ -6,4 +6,5 @@
 
 ### Usage:
 `npm install`
-`pm2 start index`
+
+`pm2 start index.js`
