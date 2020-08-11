@@ -15,7 +15,8 @@
     "fluent-ffmpeg": "^2.1.2",
     "m3u8stream": "^0.7.1",
     "through": "^2.3.8",
-    "ytdl-core": "3.1.1"
+    "ytdl-core": "3.1.1",
+    "ytsr": "^0.1.21"
   },
   "devDependencies": {},
   "keywords": [],
