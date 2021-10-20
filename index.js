@@ -30,64 +30,54 @@ app.get('/', function (req, res) {
   res.sendFile('/var/www/html/index.html');
 });
 
-app.get('/get-mp3/:videoId/:filename?', function (req, res) {
+app.get('/get-mp3/:videoId/:filename?', async function (req, res) {
   const videoId = req.params.videoId.includes(':') ? aesutil.decrypt(req.params.videoId) : req.params.videoId;
-  console.log(videoId);
   
   const videoUrl = 'https://www.youtube.com/watch?v=' + videoId;
 
   var videoReadableStream = ytdl(videoUrl, { filter: 'audioonly' });
 
-  ytdl.getInfo(videoUrl, function (err, info) {
-    var videoName = info.title.replace('|', '').toString('ascii');
+  const result = await ytdl.getInfo(videoUrl);
+  const info = result.videoDetails;
+  
+  var videoName = info.title.replace('|', '').toString('ascii');
 
-    var file_path = 'mp3s/' + videoName + '.mp3';
-    var videoWritableStream = fs.createWriteStream(file_path);
+  var file_path = __dirname + '/mp3s/' + videoName + '.mp3';
+  fs.closeSync(fs.openSync(file_path, 'w'));
 
-    //  var stream = videoReadableStream.pipe(videoWritableStream);
-    //  videoReadableStream.pipe(res);
+  //  var stream = videoReadableStream.pipe(videoWritableStream);
+  //  videoReadableStream.pipe(res);
 
-    var mp3stream = ffmpeg(videoReadableStream)
-      .audioCodec('libmp3lame')
-      .audioBitrate(128)
-      .format('mp3')
-      .on('error', (err) => console.log(err))
-      .on('end', () => {
-        var fileReadStream = fs.createReadStream(file_path);
-        var fileInfo = fs.statSync(file_path);
-        res.setHeader('Content-Length', fileInfo.size);
-        res.setHeader('Content-Type', 'audio/mp3');
-        res.setHeader('Content-Disposition', 'inline; filename=' + slugify(videoName) + '.mp3');    
-        fileReadStream.pipe(res);
+  ffmpeg(videoReadableStream)
+    .audioCodec('libmp3lame')
+    .audioBitrate(128)
+    .format('mp3')
+    .on('error', (err) => console.log(err))
+    .on('end', () => {
+      res.setHeader('Content-Type', 'audio/mp3');
+      res.setHeader('Content-Disposition', 'inline; filename=' + slugify(videoName) + '.mp3');
 
-        fileReadStream.on('end', () => {
-          console.log('File read ended.');
-          res.end();
-
-          fs.unlinkSync(file_path);
-        });
-      })
-      .pipe(videoWritableStream, {
-        end: true
-      });
-  });
+      res.end();
+    })
+    .pipe(res, {
+      end: true
+    });
 
 });
 
 app.get('/get-info/:videoId', function(req, res) {
   const videoId = req.params.videoId.includes(':') ? aesutil.decrypt(req.params.videoId) : req.params.videoId;
   const videoUrl = 'https://www.youtube.com/watch?v=' + videoId;
-  const placehold_image = "http://placehold.it/200x200?text=musiclick+p2p+server";
 
   ytdl.getInfo(videoUrl, function (err, info) {
     const thumbnailsCount = info.videoDetails.thumbnail['thumbnails'].length;
     const videoInfo = {
       thumbnails: {
         "maxres": {
-          url: hasTheTimeCome() ? info.videoDetails.thumbnail['thumbnails'][ thumbnailsCount - 1 ].url : placehold_image
+          url: info.videoDetails.thumbnail['thumbnails'][thumbnailsCount - 1].url
         },
         "default": {
-          url: hasTheTimeCome() ? info.videoDetails.thumbnail['thumbnails'][ 0 ].url : placehold_image
+          url: info.videoDetails.thumbnail['thumbnails'][0].url
         }
       },
       channelTitle: info.videoDetails.author.name,
@@ -114,33 +104,22 @@ app.get('/delete/:videoName', function (req, res) {
 
 app.get('/get-search/:queryString', async function (req, res)  {
   let response = await ytsr(req.params.queryString);
-  const placehold_image = "http://placehold.it/200x200?text=musiclick+p2p+server";
-  response.items = response.items
-                    .filter((_info) => _info.type =='video' && _info.live == false)
-                    .map((_info) => {
-                      let enc_id = aesutil.encrypt(_info.link.split('v=')[1]);
 
-                      return {
-                        id: hasTheTimeCome() ? _info.link.split('v=')[1] : enc_id,
-                        title: hasTheTimeCome() ? _info.title : formatName(_info.title),
-                        thumbnail: hasTheTimeCome() ? _info.thumbnail : placehold_image,
-                        channelTitle: hasTheTimeCome() ? _info.author.name : "musiclick p2p server",
-                        duration: _info.duration
-                      };
-                    });
+  response.items = response.items
+    .filter((_info) => _info.type =='video' && _info.live == false)
+    .map((_info) => ({
+      id: _info.link.split('v=')[1],
+      title: _info.title,
+      thumbnail: _info.thumbnail,
+      channelTitle: _info.author.name,
+      duration: _info.duration
+    }));
   res.send(response.items);
 });
 
 app.get('/s/search/:queryString', function (req, res) {
-
+  // TODO
 });
-
-function hasTheTimeCome() {
-  const now = Date.now();
-  const target = (new Date('July 01, 2020 00:20:18 GMT+03:00')).getTime();
-
-  return now >= target;
-}
 
 function formatName(str) {
   str = slugify(
@@ -153,12 +132,8 @@ function formatName(str) {
   return str;
 }
 
-function shuffle(array) {
-  return array.sort(() => Math.random() - 0.5);
-}
-
 const port = process.env.PORT ? process.env.PORT : 8080;
 
 app.listen(port, function () {
-  console.log('http://64.255.102.13:' + port);
+  console.log('http://localhost:' + port);
 });
